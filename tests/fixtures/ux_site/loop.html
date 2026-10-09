@@ -1,0 +1,9 @@
+<!doctype html><html lang="en"><head><meta charset="utf-8"><title>Filters</title>
+<style>body{font:16px sans-serif;margin:24px}</style></head><body><main><h1>Results</h1>
+<!-- Case 9: a toggle that only opens and closes; the requested option does not exist. -->
+<button aria-expanded="false" id="f" onclick="toggle()">Filters</button>
+<div id="panel" hidden><label><input type="checkbox"> Free shipping</label></div>
+</main><script>
+function toggle(){const p=document.getElementById('panel');p.hidden=!p.hidden;
+document.getElementById('f').setAttribute('aria-expanded', String(!p.hidden))}
+</script></body></html>

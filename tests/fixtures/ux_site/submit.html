@@ -1,0 +1,12 @@
+<!doctype html><html lang="en"><head><meta charset="utf-8"><title>Contact</title>
+<style>body{font:16px sans-serif;margin:24px}</style></head><body><main><h1>Contact us</h1>
+<!-- Case 5: the server takes 7 s, longer than any action wait, and then succeeds. -->
+<form onsubmit="send(event)"><label>Email <input id="email" value="test@example.com"></label>
+<button type="submit">Send message</button></form><p id="result" aria-live="polite"></p></main>
+<script>
+async function send(e){
+  e.preventDefault();
+  const r = await fetch('/api/submit', {method: 'POST'});
+  document.getElementById('result').textContent = r.ok ? 'Thanks, your message was received.' : 'Error';
+}
+</script></body></html>

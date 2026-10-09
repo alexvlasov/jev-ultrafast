@@ -91,6 +91,26 @@ uv run --env-file .env python examples/run.py \
 
 `uv run --env-file .env python examples/flights.py --keep-open` performs the flight search, checks the actual route/date/results, and saves its trace. It does not select or book a flight.
 
+## UX audit skill for Claude Code
+
+[`skills/ux-audit`](skills/ux-audit/SKILL.md) turns the agent into a UI/UX tester:
+
+1. Claude writes user scenarios that have postconditions.
+2. Jev walks through them in Chrome.
+3. [`ux_audit.py`](skills/ux-audit/scripts/ux_audit.py) records every step: its region, its effect (`navigated`, `changed`, `transient`, `none`, `timeout`) and a screenshot. It also collects deduplicated console and network errors, document metrics, and page checks at 1120px and 390px.
+4. Each scenario gets a verdict, `passed`, `failed`, `blocked` or `inconclusive`. The verdict is checked against the start state and comes with a cause: `site`, `agent`, `scenario`, `environment` or `unknown`.
+
+```bash
+ln -s "$PWD/skills/ux-audit" ~/.claude/skills/ux-audit
+skills/ux-audit/scripts/run.sh --url https://example.com --goal "Find the pricing page" --out ux-audit
+```
+
+Scenarios run in your real Chrome profile. The loop has deterministic safety limits:
+
+- Data-changing clicks never repeat on unchanged input or after an unknown effect.
+- Loops without progress stop with evidence.
+- `forbid` keeps chosen controls (publish, pay, delete) away from the model entirely.
+
 ## Why it moves
 
 - **One request per decision cycle.** Operation and target heads share the same observed state.
@@ -135,7 +155,16 @@ node --check jev_ultrafast/snapshot.js
 uv build
 ```
 
-Tests are offline. `uv run python scripts/check_guards.py` checks real controls in a local browser without model calls. Live examples and recording scripts make paid API calls. `scripts/record_flights.py <new-folder>` captures original browser timestamps; `scripts/render_demo.py <recording-folder>` renders that verified run at 1× and crops out the Google account strip. Credentials and raw traces stay ignored.
+Tests are offline. `uv run python scripts/check_guards.py` checks real controls in a local browser without model calls. `uv run python scripts/check_ux_regressions.py` runs the UX-audit regressions against a local fixture site in real Chrome. A scripted policy stands in for Jev. Those regressions cover:
+
+- delayed SPA render;
+- same names in header and form;
+- offscreen, scroll-container and sticky-header targets;
+- single add-to-cart and submit;
+- pre-existing text;
+- SPA metric scope;
+- per-tab sign-in;
+- loops, cleanup and upload walls. Live examples and recording scripts make paid API calls. `scripts/record_flights.py <new-folder>` captures original browser timestamps; `scripts/render_demo.py <recording-folder>` renders that verified run at 1× and crops out the Google account strip. Credentials and raw traces stay ignored.
 
 ---
 

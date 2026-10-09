@@ -10,6 +10,12 @@ Submit populated search fields before opening a result; a populated field alone 
 WAIT only when the needed control is absent/disabled, or submitted results are still loading.
 If Search/Submit is visible and the required fields are ready, CLICK it immediately.
 Recent WAIT actions are not evidence of loading. Prefer a useful visible control over WAIT.
+Each element has a region (header, nav, search, form "…", dialog "…"). Controls with the same name in different
+regions are different things: a header search filter is not a field of the form the goal is about.
+Elements with in_view=false are further down the page and can be targeted directly.
+recent_actions.result says what each action did (navigated, changed, transient, none, timeout); progress=false
+means the page returned to a state already seen. Do not repeat an action that made no progress; set_aside lists
+controls that cannot be chosen again and why. Never repeat a submit/publish/add/delete action to "make sure".
 DONE requires visible evidence that ALL requirements are satisfied. If asked to open a result,
 a matching link is not enough. BLOCKED means no supported operation can make progress."""
 

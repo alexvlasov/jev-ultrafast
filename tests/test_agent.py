@@ -341,3 +341,85 @@ def test_jev_and_text_helper_route_through_ai_gateway(monkeypatch):
         ("https://ai-gateway.vercel.sh/typesafe/v1/systemone", "gw", "typesafe-ai/jev"),
         ("https://ai-gateway.vercel.sh/v1/chat/completions", "gw", "inception/mercury-2.5"),
     ]
+
+
+def add_control(runner, label, node, **extra):
+    action = {"id": f"e{node}", "kind": "click", "label": label, "role": "button", "value": "", "node": node,
+              "region": "main", **extra}
+    runner.state["page"]["actions"].insert(0, action)
+    runner.state["page"]["fingerprint"] = fingerprint(runner.state["page"])
+    return action["id"]
+
+
+def act(runner, action_id):
+    runner.state["decision"] = decision(action_id)
+    return runner.command("act", {"fingerprint": runner.state["page"]["fingerprint"]})
+
+
+def test_data_changing_click_with_unknown_effect_is_never_repeated(runner):
+    add = add_control(runner, "Add to cart", 30)
+    act(runner, add)  # The page shows no change: the effect is unknown.
+    assert runner.state["guard"]["excluded"]["click|main|Add to cart"].startswith("data-changing action")
+    act(runner, add)
+    act(runner, add)
+    assert runner.state["browser"].act.call_count == 1
+    assert runner.state["status"] == "blocked" and runner.state["stop_reason"] == "repeat_mutation_refused"
+
+
+def test_confirmed_submit_runs_again_only_after_inputs_change(runner):
+    send = add_control(runner, "Send", 31, submit=True)
+    runner.state["page"]["page_key"] = [0, "", 0, 0, 0, 0, [["email", "a@b.c"]]]
+    changed = deepcopy(runner.state["page"])
+    changed["text"] = "Please fix the email"
+    changed["fingerprint"] = fingerprint(changed)
+    runner.state["browser"].observe.return_value = changed
+    act(runner, send)
+    assert runner.state["history"][-1]["result"] == "changed"
+    act(runner, send)  # Same inputs: refused, not executed.
+    assert runner.state["browser"].act.call_count == 1
+    runner.state["page"]["page_key"] = [0, "", 0, 0, 0, 0, [["email", "fixed@b.c"]]]
+    runner.state["guard"]["excluded"].clear()
+    act(runner, send)
+    assert runner.state["browser"].act.call_count == 2
+
+
+def test_two_identical_attempts_without_progress_set_the_target_aside_then_stop(runner):
+    filters = add_control(runner, "Filters", 32)
+    act(runner, filters)
+    act(runner, filters)
+    assert "click|main|Filters" in runner.state["guard"]["excluded"] and runner.state["status"] == "ready"
+    act(runner, "e3")  # Any further failed attempt ends the scenario with evidence.
+    assert runner.state["status"] == "blocked" and runner.state["stop_reason"] == "no_progress_loop"
+    assert runner.state["stop_evidence"][-1]["action"] == "Go"
+
+
+def test_set_aside_targets_are_not_offered_to_the_model(monkeypatch):
+    calls = []
+
+    def post(_url, _key, body):
+        calls.append(body)
+        return {"model": "test", "answers": {"operation": choice(body["questions"]["operation"]["criteria"], "WAIT")}}
+
+    monkeypatch.setenv("AI_GATEWAY_API_KEY", "test")
+    monkeypatch.setattr(model, "post_json", post)
+    model.choose(page(), "Find a book", [], excluded={"click||Go": "tried 2× without progress"})
+    labels = [c["element"] for c in calls[0]["questions"]["click_target"]["criteria"].values()]
+    assert not any("Go" in label for label in labels)
+    assert calls[0]["state"]["set_aside"] == [{"control": "Go", "region": "", "why": "tried 2× without progress"}]
+
+
+def test_time_budget_stops_before_another_model_call(runner, monkeypatch):
+    called = Mock()
+    monkeypatch.setattr(loop, "choose", called)
+    runner.state.update(status="ready", decision=None, max_seconds=1, started_at=time.perf_counter() - 5)
+    runner.command("tick")
+    called.assert_not_called()
+    assert runner.state["stop_reason"] == "time_budget"
+
+
+def test_forbidden_controls_are_never_executed(runner):
+    publish = add_control(runner, "Publicar anuncio", 33)
+    runner.state["forbid"] = "publicar|publish"
+    act(runner, publish)
+    runner.state["browser"].act.assert_not_called()
+    assert runner.state["stop_reason"] == "forbidden_action_chosen"

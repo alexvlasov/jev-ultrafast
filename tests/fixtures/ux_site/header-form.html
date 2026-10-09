@@ -1,0 +1,27 @@
+<!doctype html><html lang="en"><head><meta charset="utf-8"><title>Post an ad</title>
+<style>body{font:16px sans-serif;margin:0}header{display:flex;gap:12px;padding:12px;background:#223;color:#fff}
+header button{padding:8px}#search-cats{position:absolute;top:56px;left:12px;background:#fff;color:#000;border:1px solid #888;padding:8px}
+main{padding:24px;max-width:640px}.cat{display:inline-block;margin:4px;padding:10px 14px;border:1px solid #888;background:#fff}
+#form-cats[hidden],#search-cats[hidden]{display:none}</style></head><body>
+<!-- Case 2: the header search filter and the form field share the accessible name "Category". -->
+<header><form role="search" onsubmit="return false"><button type="button" id="hcat" aria-haspopup="dialog"
+  onclick="document.getElementById('search-cats').hidden=false">Category: All categories</button>
+  <input type="search" aria-label="Search ads"></form>
+  <div id="search-cats" role="dialog" aria-label="Choose search category" hidden>
+  <button type="button" onclick="pickSearch(this)">Home &amp; garden</button>
+  <button type="button" onclick="pickSearch(this)">Lighting</button>
+  <button type="button" onclick="pickSearch(this)">Real estate</button></div></header>
+<main><h1>Post an ad</h1>
+<form aria-label="Post an ad" onsubmit="event.preventDefault(); document.getElementById('done').textContent=
+  'Category confirmed for the ad: ' + (window.adCategory || 'none')">
+  <p>Step 2 of 4: Category</p>
+  <button type="button" id="fcat" onclick="document.getElementById('form-cats').hidden=false">Category: not chosen</button>
+  <div id="form-cats" role="group" aria-label="Ad category" hidden>
+    <button type="button" class="cat" onclick="pickForm(this)">Furniture</button>
+    <button type="button" class="cat" onclick="pickForm(this)">Lighting</button>
+    <button type="button" class="cat" onclick="pickForm(this)">Electronics</button></div>
+  <p><button type="submit">Continue</button></p><p id="done"></p></form></main>
+<script>
+function pickSearch(b){document.getElementById('hcat').textContent='Category: '+b.textContent;document.getElementById('search-cats').hidden=true}
+function pickForm(b){window.adCategory=b.textContent;document.getElementById('fcat').textContent='Category: '+b.textContent;document.getElementById('form-cats').hidden=true}
+</script></body></html>

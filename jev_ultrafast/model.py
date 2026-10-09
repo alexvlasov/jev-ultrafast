@@ -10,6 +10,7 @@ import httpx
 from .questions import NEXT_ACTION, TARGET, TEXT_VALUE
 
 CLIENT = httpx.Client(http2=True, timeout=25)
+HISTORY_FIELDS = ("action", "region", "kind", "text", "result", "progress")
 GATEWAY = os.environ.get("AI_GATEWAY_BASE_URL", "https://ai-gateway.vercel.sh").rstrip("/")
 
 
@@ -53,12 +54,19 @@ def validate_choice(answer, ids):
     return answer
 
 
-def action_space(actions):
+def action_key(action):
+    """Stable identity of a control across re-renders: what it does, where it is, what it is called."""
+    return f"{action['kind']}|{action.get('region', '')}|{action.get('label', '')}"
+
+
+def action_space(actions, excluded=()):
     """One index per observed element; each operation has its own valid target choices."""
     elements, indices, targets, controls = [], {}, {}, {}
     operations = {"click": "CLICK", "fill": "TYPE_TEXT", "select": "SELECT"}
     for action in actions:
         kind = action["kind"]
+        if action_key(action) in excluded:
+            continue  # Set aside by the loop or mutation guard; the model cannot pick it again.
         if kind not in operations:
             controls[action["id"].upper()] = action
             continue
@@ -66,7 +74,8 @@ def action_space(actions):
         if node not in indices:
             index = str(len(elements) + 1)
             indices[node] = index
-            element = {k: action[k] for k in ("role", "value", "checked", "selected", "expanded") if k in action}
+            element = {k: action[k] for k in ("role", "value", "checked", "selected", "expanded", "region", "in_view")
+                       if k in action}
             element.update(index=index, label=action["label"].split(" → ")[0], operations=[])
             if kind == "select":
                 element["value"] = action.get("current_value", "")
@@ -86,8 +95,9 @@ def action_space(actions):
     return elements, targets, controls
 
 
-def choose(state, goal, history):
-    elements, targets, controls = action_space(state["actions"])
+def choose(state, goal, history, excluded=None):
+    excluded = excluded or {}
+    elements, targets, controls = action_space(state["actions"], excluded)
     labels = {
         "CLICK": "Click an element, button, menu option, autocomplete suggestion, or calendar day.",
         "TYPE_TEXT": "Enter or replace text in an editable field. A small LLM will supply the value from the goal.",
@@ -106,7 +116,7 @@ def choose(state, goal, history):
                 index: {
                     "element": f"[{index}] {a['label']}",
                     "current_value": a.get("current_value", a.get("value", "")),
-                    **{k: a[k] for k in ("role", "checked", "selected", "expanded") if k in a},
+                    **{k: a[k] for k in ("role", "region", "in_view", "checked", "selected", "expanded") if k in a},
                 }
                 for index, a in candidates.items()
             },
@@ -115,11 +125,16 @@ def choose(state, goal, history):
     body = {
         "model": os.environ.get("TYPESAFE_MODEL", "typesafe-ai/jev"),
         "state": {
-            "page": {k: state[k] for k in ("url", "title", "text")},
+            "page": {
+                **{k: state[k] for k in ("url", "title", "text")},
+                **{k: state[k] for k in ("modal", "current_step") if state.get(k)},
+            },
             "elements": elements,
             "recent_actions": [
-                {k: h.get(k) for k in ("action", "kind", "text", "page_changed")} for h in history[-10:]
+                {k: h[k] for k in HISTORY_FIELDS if h.get(k) is not None} for h in history[-10:]
             ],
+            **({"set_aside": [{"control": key.split("|", 2)[2], "region": key.split("|", 2)[1], "why": why}
+                              for key, why in excluded.items()]} if excluded else {}),
         },
         "questions": questions,
     }
@@ -150,7 +165,9 @@ def choose(state, goal, history):
         "target_confidence": target_answer["confidence"] if target_answer else None,
         "raw_answers": result["answers"],
         "model": result["model"],
-        "usage": result.get("usage", {}),
+        "usage": {**result.get("usage", {}),
+                  **({"cost": float(cost)} if (cost := result.get("provider_metadata", {}).get("gateway", {})
+                                                .get("cost")) is not None else {})},
         "latency_ms": round((time.perf_counter() - started) * 1000),
         "request": body,
     }

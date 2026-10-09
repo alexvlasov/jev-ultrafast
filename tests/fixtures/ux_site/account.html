@@ -1,0 +1,12 @@
+<!doctype html><html lang="en"><head><meta charset="utf-8"><title>Account</title>
+<style>body{font:16px sans-serif;margin:24px}</style></head><body><main id="m"></main>
+<script>
+// Case 8: the sign-in lives in sessionStorage, so it belongs to one tab only.
+const m = document.getElementById('m');
+const show = () => m.innerHTML = sessionStorage.getItem('fixture-user')
+  ? '<h1>My account</h1><p>Signed in as Test User</p><a href="/post.html">Post an ad</a>'
+  : '<h1>Sign in</h1><form onsubmit="event.preventDefault();sessionStorage.setItem(\'fixture-user\',\'test\');show()">' +
+    '<label>Email <input type="email"></label> <label>Password <input type="password"></label>' +
+    '<button type="submit">Sign in</button></form>';
+show();
+</script></body></html>

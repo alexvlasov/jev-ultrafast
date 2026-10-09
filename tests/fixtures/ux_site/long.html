@@ -1,0 +1,13 @@
+<!doctype html><html lang="en"><head><meta charset="utf-8"><title>Long page</title>
+<style>body{font:16px sans-serif;margin:24px}#list{height:180px;overflow-y:auto;border:1px solid #999;width:320px}
+#list button{display:block;margin:6px;padding:6px}#spacer{height:2400px}</style></head><body><main>
+<h1>Reviews</h1><p id="status">Nothing chosen yet.</p>
+<!-- Case 3: one target inside a scroll container, one far below the viewport. -->
+<div id="list" aria-label="Colour list"></div>
+<div id="spacer"></div>
+<button onclick="document.getElementById('status').textContent='All reviews loaded.'">Load all reviews</button>
+</main><script>
+const list = document.getElementById('list');
+for (let i = 1; i <= 30; i++) list.insertAdjacentHTML('beforeend',
+  `<button onclick="document.getElementById('status').textContent='Chosen colour ${i}.'">Colour ${i}</button>`);
+</script></body></html>

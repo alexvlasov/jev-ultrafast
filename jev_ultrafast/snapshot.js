@@ -52,14 +52,42 @@
       e.getAttribute('aria-expanded'),e.getAttribute('aria-checked'),e.getAttribute('aria-selected'),
       e.getAttribute('href'),scope?.innerText?.slice(0,6000)||''];
   };
+  // Where a control lives: same-named controls in a header search and in a form are different choices.
+  const short=t=>(t||'').trim().replace(/\s+/g,' ').slice(0,48);
+  const heading=c=>short(c.getAttribute('aria-label') ||
+    (c.getAttribute('aria-labelledby')||'').split(/\s+/).map(id=>document.getElementById(id)?.innerText||'').join(' ') ||
+    c.querySelector('legend,h1,h2,h3,h4,[role=heading]')?.innerText);
+  const LANDMARKS=[['header,[role=banner]','header'],['nav,[role=navigation]','nav'],
+    ['footer,[role=contentinfo]','footer'],['aside,[role=complementary]','aside'],['main,[role=main]','main']];
+  const region = e => {
+    const parts=[];
+    for (const [sel,label] of LANDMARKS) if (e.closest(sel)) { parts.push(label); break; }
+    if (e.closest('[role=search],form[role=search]') || e.closest('form')?.querySelector('input[type=search]'))
+      parts.push('search');
+    const form=e.closest('form');
+    if (form && !parts.includes('search')) parts.push(heading(form) ? `form "${heading(form)}"` : 'form');
+    const group=e.closest('fieldset,[role=group],[role=radiogroup],[role=listbox],[role=menu],[role=tablist],section,[role=region]');
+    if (group && group!==form && heading(group)) parts.push(`"${heading(group)}"`);
+    const dialog=e.closest('dialog,[role=dialog],[role=alertdialog],[aria-modal="true"]');
+    if (dialog) parts.push(heading(dialog) ? `dialog "${heading(dialog)}"` : 'dialog');
+    return parts.join(' › ') || 'page';
+  };
+  // A modal dialog makes the rest of the page unreachable for people; offer only its controls.
+  const modal=[...document.querySelectorAll('dialog:modal,[aria-modal="true"]')].find(visible) || null;
+  const step=document.querySelector('[aria-current="step"]');
   const actions=[];
   for (const e of document.querySelectorAll(selector)) {
     if (!safe(e) || !visible(e) || e.matches(':disabled') || e.closest('[aria-disabled="true"]')) continue;
+    if (modal && !modal.contains(e)) continue;
     const r=e.getBoundingClientRect(), x=r.x+r.width/2, y=r.y+r.height/2, rname=role(e);
-    if (!rname || r.width<=0 || r.height<=0 || x<0 || y<0 || x>=innerWidth || y>=innerHeight) continue;
+    // Offscreen vertically is still on the page (the executor scrolls it into view); offscreen sideways is
+    // usually a closed carousel or drawer.
+    if (!rname || r.width<=0 || r.height<=0 || x<0 || x>=innerWidth) continue;
     if (rname==='gridcell' && e.querySelector('button,[role="button"]')) continue;
-    const base={node:identity(e),role:rname,label:name(e)||rname,
+    const in_view=y>=0 && y<innerHeight;
+    const base={node:identity(e),role:rname,label:name(e)||rname,region:region(e),in_view,
       rect:{x:r.x,y:r.y,w:r.width,h:r.height}};
+    if (e.form && ['submit','image'].includes(e.type)) base.submit=true;
     for (const key of ['checked','selected','expanded']) {
       const value=e.getAttribute('aria-'+key);
       if (value!==null) base[key]=value;
@@ -96,12 +124,37 @@
   const semantics=actions.map(({rect,...action})=>action);
   const marker=[performance.timeOrigin,location.href,scrollX,scrollY,innerWidth,innerHeight,
     document.title,text,semantics,page_key[6]];
-  const omitted_actions=Math.max(0,actions.length-250);
-  actions.splice(250);
+  // Keep what is on screen first, then the nearest offscreen controls, within the model's budget.
+  const distance=a=>a.in_view ? 0 : Math.min(Math.abs(a.rect.y), Math.abs(a.rect.y-innerHeight));
+  const ranked=actions.map((a,i)=>[distance(a),i,a]).sort((p,q)=>p[0]-q[0]||p[1]-q[1]).slice(0,250)
+    .sort((p,q)=>p[1]-q[1]).map(p=>p[2]);
+  const omitted_actions=actions.length-ranked.length;
+  actions.length=0; actions.push(...ranked);
   actions.forEach((a,i)=>a.id='e'+(i+1));
-  if (scrollY+innerHeight<height-2) actions.push({id:'scroll_down',kind:'scroll',label:'Scroll down',delta:560});
-  if (scrollY>0) actions.push({id:'scroll_up',kind:'scroll',label:'Scroll up',delta:-560});
+  if (scrollY+innerHeight<height-2) actions.push({id:'scroll_down',kind:'scroll',label:'Scroll page down',
+    region:'page',delta:Math.round(innerHeight*0.8)});
+  if (scrollY>0) actions.push({id:'scroll_up',kind:'scroll',label:'Scroll page up',region:'page',
+    delta:-Math.round(innerHeight*0.8)});
+  // Nested scroll containers (lists, dropdowns, side panels) scroll independently of the page.
+  let containers=0;
+  for (const c of (modal || document.body).querySelectorAll('*')) {
+    if (containers>=6) break;
+    if (c.scrollHeight<=c.clientHeight+4 || c.clientHeight<80 || !visible(c)) continue;
+    if (!['auto','scroll'].includes(getComputedStyle(c).overflowY)) continue;
+    const r=c.getBoundingClientRect();
+    if (r.bottom<=0 || r.top>=innerHeight) continue;
+    containers+=1;
+    const where=region(c)+(heading(c) ? ` "${heading(c)}"` : '');
+    if (c.scrollTop+c.clientHeight<c.scrollHeight-2) actions.push({id:'scroll_c'+containers+'_down',kind:'scroll',
+      node:identity(c),label:'Scroll down inside '+where,region:region(c),delta:Math.round(c.clientHeight*0.8)});
+    if (c.scrollTop>0) actions.push({id:'scroll_c'+containers+'_up',kind:'scroll',node:identity(c),
+      label:'Scroll up inside '+where,region:region(c),delta:-Math.round(c.clientHeight*0.8)});
+  }
   actions.push({id:'wait',kind:'wait',label:'Wait for the page to update'});
   return {url:location.href,title:document.title,w:innerWidth,h:innerHeight,text,
-    scroll:{y:scrollY,height},actions,marker,page_key,guards,omitted_actions};
+    scroll:{y:scrollY,height},actions,marker,page_key,guards,omitted_actions,
+    document_id:performance.timeOrigin,modal:modal ? (heading(modal)||'dialog') : null,
+    current_step:step ? short(step.innerText) : null,
+    login_form_visible:[...document.querySelectorAll('input[type=password]')].some(visible),
+    file_inputs:document.querySelectorAll('input[type=file]').length};
 })()

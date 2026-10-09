@@ -1,0 +1,24 @@
+<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width">
+<title>SPA fixture</title><style>body{font:16px sans-serif;margin:24px}#banner{height:160px;background:#ddd}</style></head>
+<body><div id="app"><p>Loading…</p></div>
+<script>
+// Case 1: first render 1.2 s after load. Case 7: client-side routes; route B shifts its own layout.
+const app = document.getElementById('app');
+const render = () => {
+  const b = location.pathname.endsWith('/b');
+  app.innerHTML = b
+    ? '<main><h1>Route B</h1><p id="b-text">Second route content</p><a href="/spa/a" data-link>Go to route A</a></main>'
+    : '<main><h1>Route A</h1><p>First route content</p><a href="/spa/b" data-link>Go to route B</a></main>';
+  if (b) setTimeout(() => app.insertAdjacentHTML('afterbegin', '<div id="banner">Promo</div>'), 800);  // > 500 ms after input: counts as a shift
+};
+document.addEventListener('click', e => {
+  const a = e.target.closest('[data-link]');
+  if (!a) return;
+  e.preventDefault();
+  history.pushState({}, '', a.getAttribute('href'));
+  app.innerHTML = '<p>Loading…</p>';
+  setTimeout(render, 300);
+});
+addEventListener('popstate', render);
+setTimeout(render, 1200);
+</script></body></html>

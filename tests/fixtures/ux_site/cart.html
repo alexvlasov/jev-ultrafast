@@ -1,0 +1,12 @@
+<!doctype html><html lang="en"><head><meta charset="utf-8"><title>Lamp</title>
+<style>body{font:16px sans-serif;margin:24px}#toast{position:fixed;bottom:16px;right:16px;background:#222;color:#fff;padding:10px}</style>
+</head><body><main><h1>Desk lamp</h1><p>Price: 25 EUR</p>
+<!-- Case 4: the server answers after 600 ms; feedback is a toast that disappears after 1.2 s. -->
+<button id="add" onclick="add()">Add to cart</button></main>
+<script>
+async function add(){
+  await fetch('/api/cart', {method: 'POST'});
+  const t = document.createElement('div'); t.id = 'toast'; t.textContent = 'Added to cart';
+  document.body.append(t); setTimeout(() => t.remove(), 1200);
+}
+</script></body></html>
