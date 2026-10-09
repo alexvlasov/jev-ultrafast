@@ -1,4 +1,4 @@
-"""TypeSafe makes choices; an optional small OpenAI-compatible model writes field values."""
+"""Jev makes choices; an optional small model writes field values. Both route through Vercel AI Gateway."""
 
 import json
 import math
@@ -10,6 +10,14 @@ import httpx
 from .questions import NEXT_ACTION, TARGET, TEXT_VALUE
 
 CLIENT = httpx.Client(http2=True, timeout=25)
+GATEWAY = os.environ.get("AI_GATEWAY_BASE_URL", "https://ai-gateway.vercel.sh").rstrip("/")
+
+
+def gateway_key():
+    key = os.environ.get("AI_GATEWAY_API_KEY") or os.environ.get("VERCEL_OIDC_TOKEN")
+    if not key:
+        raise ValueError("Set AI_GATEWAY_API_KEY (or VERCEL_OIDC_TOKEN); no action executed.")
+    return key
 
 
 def post_json(url, key, body):
@@ -105,7 +113,7 @@ def choose(state, goal, history):
             "instructions": {"goal": goal, "operation": operation, "rules": [NEXT_ACTION, TARGET]},
         }
     body = {
-        "model": os.environ.get("TYPESAFE_MODEL", "jev-latest"),
+        "model": os.environ.get("TYPESAFE_MODEL", "typesafe-ai/jev"),
         "state": {
             "page": {k: state[k] for k in ("url", "title", "text")},
             "elements": elements,
@@ -116,7 +124,7 @@ def choose(state, goal, history):
         "questions": questions,
     }
     started = time.perf_counter()
-    result = post_json("https://api.typesafe.ai/v1/systemone", os.environ["TYPESAFE_API_KEY"], body)
+    result = post_json(GATEWAY + "/typesafe/v1/systemone", gateway_key(), body)
     operation_answer = validate_choice(result["answers"].get("operation", {}), operations)
     operation = operation_answer["choice"]
     target = None
@@ -158,11 +166,13 @@ def field_context(goal, action, page, history):
 
 
 def field_text(context):
-    key = os.environ.get("TEXT_MODEL_API_KEY")
+    key = os.environ.get("TEXT_MODEL_API_KEY") or os.environ.get("AI_GATEWAY_API_KEY")
     if not key:
-        raise ValueError("TYPE_TEXT needs TEXT_MODEL_API_KEY; no text is hardcoded or guessed by the executor.")
-    base = os.environ.get("TEXT_MODEL_BASE_URL", "https://api.deepseek.com/v1").rstrip("/")
-    model = os.environ.get("TEXT_MODEL", "deepseek-chat")
+        raise ValueError(
+            "TYPE_TEXT needs AI_GATEWAY_API_KEY or TEXT_MODEL_API_KEY; no text is hardcoded or guessed by the executor."
+        )
+    base = os.environ.get("TEXT_MODEL_BASE_URL", GATEWAY + "/v1").rstrip("/")
+    model = os.environ.get("TEXT_MODEL", "inception/mercury-2.5")
     reasoning = {"thinking": {"type": "disabled"}} if "api.deepseek.com/" in base else {"reasoning": {"effort": "low"}}
     if os.environ.get("TEXT_MODEL_REASONING") == "none":
         reasoning = {"reasoning": {"enabled": False}}

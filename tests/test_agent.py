@@ -88,7 +88,7 @@ def test_all_heads_are_one_request_and_only_matching_head_executes(monkeypatch):
             },
         }
 
-    monkeypatch.setenv("TYPESAFE_API_KEY", "test")
+    monkeypatch.setenv("AI_GATEWAY_API_KEY", "test")
     monkeypatch.setattr(model, "post_json", post)
     d = model.choose(page(), "Find a book", [])
     assert len(calls) == 1
@@ -107,7 +107,7 @@ def test_click_cannot_consume_a_text_target(monkeypatch):
             },
         }
 
-    monkeypatch.setenv("TYPESAFE_API_KEY", "test")
+    monkeypatch.setenv("AI_GATEWAY_API_KEY", "test")
     monkeypatch.setattr(model, "post_json", post)
     with pytest.raises(ValueError, match="Invalid TypeSafe"):
         model.choose(page(), "Find a book", [])
@@ -134,7 +134,7 @@ def test_target_head_receives_control_state_and_full_next_step_rules(monkeypatch
             },
         }
 
-    monkeypatch.setenv("TYPESAFE_API_KEY", "test")
+    monkeypatch.setenv("AI_GATEWAY_API_KEY", "test")
     monkeypatch.setattr(model, "post_json", post)
     d = model.choose(p, "Search with free cancellation", [])
     assert d["choice"] == "e3"
@@ -153,7 +153,8 @@ def test_quoted_task_text_still_uses_the_llm(monkeypatch):
 
 def test_missing_text_credential_stops_before_guessing(monkeypatch):
     monkeypatch.delenv("TEXT_MODEL_API_KEY", raising=False)
-    with pytest.raises(ValueError, match="TEXT_MODEL_API_KEY"):
+    monkeypatch.delenv("AI_GATEWAY_API_KEY", raising=False)
+    with pytest.raises(ValueError, match="AI_GATEWAY_API_KEY"):
         model.field_text({"goal": 'Enter "Zurich"'})
 
 
@@ -318,3 +319,25 @@ def test_navigation_during_prediction_reobserves_without_action(runner):
     assert runner.state["status"] == "ready"
     assert runner.state["decision"] is None
     runner.state["browser"].act.assert_not_called()
+
+
+def test_jev_and_text_helper_route_through_ai_gateway(monkeypatch):
+    monkeypatch.setenv("AI_GATEWAY_API_KEY", "gw")
+    for name in ("TEXT_MODEL_API_KEY", "TEXT_MODEL_BASE_URL", "TEXT_MODEL", "TYPESAFE_MODEL"):
+        monkeypatch.delenv(name, raising=False)
+    calls = []
+
+    def post(url, key, body):
+        calls.append((url, key, body["model"]))
+        if "questions" in body:
+            return {"model": body["model"], "answers": {
+                "operation": choice(body["questions"]["operation"]["criteria"], "DONE")}}
+        return {"choices": [{"message": {"content": '{"text":"Zurich"}'}}]}
+
+    monkeypatch.setattr(model, "post_json", post)
+    model.choose(page(), "Find a book", [])
+    model.field_text({"goal": "Fly from Zurich"})
+    assert calls == [
+        ("https://ai-gateway.vercel.sh/typesafe/v1/systemone", "gw", "typesafe-ai/jev"),
+        ("https://ai-gateway.vercel.sh/v1/chat/completions", "gw", "inception/mercury-2.5"),
+    ]

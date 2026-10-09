@@ -57,7 +57,7 @@ git clone https://github.com/browser-use/jev-ultrafast.git
 cd jev-ultrafast
 uv sync
 cp .env.example .env
-# Add TYPESAFE_API_KEY and TEXT_MODEL_API_KEY.
+# Add AI_GATEWAY_API_KEY (Vercel AI Gateway).
 uv run jev
 ```
 
@@ -65,7 +65,7 @@ Open **http://127.0.0.1:8766** and click **Start demo → Run automatically**. T
 
 Chrome connects through [Browser Harness](https://github.com/browser-use/browser-harness), installed by `uv sync`. Run `uv run browser-harness --doctor` if it needs connecting. Allow remote debugging in Chrome when prompted.
 
-`TEXT_MODEL_API_KEY` is an OpenRouter key in the example configuration. The current demo uses `inception/mercury-2.5` with reasoning disabled. Gemini, GLM, and DeepSeek can also use the OpenAI-compatible text helper; configure the appropriate model, endpoint, and reasoning setting.
+Both models route through [Vercel AI Gateway](https://vercel.com/docs/ai-gateway) with one `AI_GATEWAY_API_KEY` (a `VERCEL_OIDC_TOKEN` also works for Jev). Jev (`typesafe-ai/jev`) is called on the gateway's TypeSafe-compatible endpoint, `https://ai-gateway.vercel.sh/typesafe/v1/systemone`. The text helper uses the gateway's OpenAI-compatible endpoint with `inception/mercury-2.5` and reasoning disabled. Any other gateway chat model can be set with `TEXT_MODEL`. To use a different provider for text, set `TEXT_MODEL_API_KEY` and `TEXT_MODEL_BASE_URL`.
 
 ## Use the library
 
