@@ -17,6 +17,8 @@ The agent code lives in the `jev-ultrafast` repository this skill belongs to. `s
 - **Data-changing clicks** (submit buttons, and labels like add to cart, publish, delete, send, pay, in several languages; a heuristic) run at most once. A second run happens only if the first had a confirmed effect and the form inputs changed since. A click with an unknown effect (`none`, `timeout`) is set aside, and the agent waits or re-observes instead of repeating it.
 - **Loops.** The same control tried twice without reaching a new page state is set aside, and Jev is told so. The next attempt without progress ends the scenario as `no_progress_loop`, with the last steps as evidence. Budgets: `max_steps` (default 30) and `max_seconds` (default 180).
 - **`forbid`** in a scenario is a regex over control labels. Matching controls are never offered and never executed. Use it for anything the scenario must not do (`"publicar|publish|pay|delete"`).
+- **`scope`** is a regex over regions. Clicks, typing and selects outside the matching regions are never offered. Example: `"form"` keeps a form scenario off the header search, which has the same field names. Leave it out for navigation scenarios.
+- **Cost of thoroughness.** Effect waits and offscreen controls make runs slower and larger than the original demo. Google Flights took 17.7 s with ~12.8k input tokens per decision, versus 9.7 s and ~5.5k before these changes. The decision log under `usage` gives the numbers for each run.
 
 ## 0. Preconditions
 
@@ -98,7 +100,7 @@ Each scenario needs **postconditions that are false at the start and true only a
 | `expect.url_contains`, `expect.url_changed`, `expect.title_contains` | URL and title checks. |
 | `expect.text_contains`, `expect.text_absent` | Whole page text at the end. |
 | `expect.text_seen` | Appeared after any action, for feedback that disappears again (toasts). |
-| `requires_auth`, `forbid`, `max_steps`, `max_seconds`, `reuse_tab` | Per scenario. |
+| `requires_auth`, `forbid`, `scope`, `max_steps`, `max_seconds`, `reuse_tab` | Per scenario. |
 | Top level: `mobile: false`, `reuse_tab: true` | Skip the mobile pass; equivalent to `--reuse-tab`. |
 
 ## 3. Run

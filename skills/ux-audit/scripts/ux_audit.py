@@ -283,7 +283,8 @@ def run_scenario(spec, site, out, audited, defaults):
     upload_pages = set()  # steps after which the observed page asked for a file
     try:
         agent = Agent(url, spec["goal"], screenshots=True, init_script=CAPTURE, reuse_tab=reuse_tab,
-                      max_seconds=spec.get("max_seconds", defaults["max_seconds"]), forbid=spec.get("forbid"))
+                      max_seconds=spec.get("max_seconds", defaults["max_seconds"]), forbid=spec.get("forbid"),
+                      scope=spec.get("scope"))
         browser = agent.browser
         baseline = safe_eval(browser, FACTS) or {"url": url, "title": "", "text": "", "login_form_visible": None}
         result["baseline"] = {k: baseline[k] for k in ("url", "title", "login_form_visible")}
@@ -471,7 +472,7 @@ def scenario_lines(s):
     errors = [e for e in s["console"] if e["kind"] != "console.warn"]
     if errors:
         lines += ["", "Console/runtime errors (deduplicated):"]
-        lines += [f"- {e['count']}× [{e['kind']}] {e['message'][:160]}" for e in errors[:8]]
+        lines += [f"- {e.get('count', 1)}× [{e['kind']}] {e['message'][:160]}" for e in errors[:8]]
     metrics = (s.get("final_metrics") or {}).get("document")
     if metrics:
         lines.append(f"\nFinal document ({metrics['url']}): {metric_line(metrics)}")

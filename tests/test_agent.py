@@ -423,3 +423,11 @@ def test_forbidden_controls_are_never_executed(runner):
     act(runner, publish)
     runner.state["browser"].act.assert_not_called()
     assert runner.state["stop_reason"] == "forbidden_action_chosen"
+
+
+def test_scope_keeps_targets_inside_the_named_region(runner):
+    header = add_control(runner, "Category", 34, region="header › search")
+    runner.state["scope"] = "form"
+    act(runner, header)
+    runner.state["browser"].act.assert_not_called()
+    assert runner.state["stop_reason"] == "forbidden_action_chosen"

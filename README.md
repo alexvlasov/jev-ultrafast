@@ -117,7 +117,7 @@ Scenarios run in your real Chrome profile. The loop has deterministic safety lim
 - **No screenshots in the default agent loop.** Jev consumes structured state. The inspector opts into screenshots; the video uses a separate continuous screencast.
 - **One browser call per snapshot.** Read visible controls, their names, values, and text atomically. Keep references to the actual DOM nodes.
 - **Validate the selected target.** Clicks check the document, form values, target, and nearby context. Animation alone does not force another prediction. Resolve current geometry and reject covered controls before input.
-- **Wait for useful state.** After typing into a combobox, wait for visible suggestions, capped at 200 ms. Other interactions get at most two animation frames or 50 ms. These reads happen after execution is logged.
+- **Wait for the effect, bounded.** [settle.js](jev_ultrafast/settle.js) arms a DOM, URL and request watcher right before input. It returns once the page has been quiet for 150–300 ms after a change. Without any change, it gives up after about 1 s, or 0.3 s for typing. The hard caps are 3 s, and 5 s for data-changing clicks. Each step records `navigated`, `changed`, `transient`, `none` or `timeout`. These reads happen after execution is logged. The timings below were measured before this change, with a fixed 50 ms wait (200 ms for combobox suggestions).
 - **Keep hidden tabs rendering.** Focus emulation prevents background animation throttling without switching Chrome's visible tab.
 - **Send visible text.** Offscreen article bodies and footers do not fill the model context.
 - **Reuse an interrupted text request.** A generated value survives a stale-page retry only if the entire text-helper input is unchanged.
@@ -130,6 +130,7 @@ Every executed target is resolved from an observed node. The executor rechecks p
 | --- | --- |
 | [agent.py](jev_ultrafast/agent.py) | The complete loop and text-helper handoff |
 | [snapshot.js](jev_ultrafast/snapshot.js) | Atomic DOM snapshot, indexed controls, freshness guards |
+| [settle.js](jev_ultrafast/settle.js) | Bounded wait for an action's observable effect |
 | [browser.py](jev_ultrafast/browser.py) | Browser connection, current geometry, execution |
 | [model.py](jev_ultrafast/model.py) | Dynamic operation/target heads and text generation |
 | [questions.py](jev_ultrafast/questions.py) | Model instructions |
@@ -139,7 +140,7 @@ Every executed target is resolved from an observed node. The executor rechecks p
 
 The current video is a **7,073 ms** Google Flights run. Timing starts after initial page observation and includes model calls, generated text, browser work, stale decisions, and loading waits. A fresh independent check verifies the one-way setting, Zürich, London, September 20, 2026, and visible flight options. The video plays at 1×, with no opening hold and a 0.5-second final hold.
 
-In six alternating runs with identical models and settings, both versions passed **3/3**. Median task time went from **9.450 s → 7.092 s**, a **25% reduction**; median browser protocol calls went from **1,092 → 101**. This is three repeats of one task on one browser profile, not a general reliability benchmark.
+These measurements predate the effect-based wait and the AI Gateway routing. In six alternating runs with identical models and settings, both versions passed **3/3**. Median task time went from **9.450 s → 7.092 s**, a **25% reduction**; median browser protocol calls went from **1,092 → 101**. This is three repeats of one task on one browser profile, not a general reliability benchmark.
 
 The same policy opened the requested Wikipedia article in **2.798 s** and passed a local hotel search/filter task in **1.896 s**. Runs, failures, source hashes, and measurement boundaries are in [performance.md](docs/performance.md).
 

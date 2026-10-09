@@ -160,6 +160,18 @@ def check_offscreen_and_container(base, _ux):
                                                      and "inside" in a["label"] and a["delta"] > 0), None)),
         max_ticks=10)
     assert "Chosen colour 30." in state["dom_text"], "item at the end of the scroll container was not reached"
+    # The container's own scroll action must move that container, not the page.
+    browser = Browser(base + "/long.html")
+    try:
+        page = browser.observe(screenshot=False)
+        scroll = next((x for x in page["actions"] if x["kind"] == "scroll" and "inside" in x["label"]
+                       and x["delta"] > 0), None)
+        assert scroll, f"no container scroll offered: {[x['label'] for x in page['actions'] if x['kind'] == 'scroll']}"
+        browser.act(scroll, page)
+        moved = browser.evaluate("[document.getElementById('list').scrollTop, scrollY]")
+        assert moved[0] > 0 and moved[1] == 0, f"container/page scrollTop after container scroll: {moved}"
+    finally:
+        browser.close()
 
 
 # 4. Slow add-to-cart: a stubborn policy keeps choosing it; the server must see exactly one add.

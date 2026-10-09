@@ -44,7 +44,7 @@ def inputs(page):
 
 class Agent:
     def __init__(self, url, goals, *, record_dir=None, screenshots=False, init_script=None, reuse_tab=False,
-                 max_seconds=180, forbid=None):
+                 max_seconds=180, forbid=None, scope=None):
         task = goals.strip() if isinstance(goals, str) else "\n".join(goals).strip()
         if not task:
             raise ValueError("Supply a task")
@@ -75,6 +75,7 @@ class Agent:
             record=bool(self.record_dir),
             max_seconds=max_seconds,
             forbid=forbid,
+            scope=scope,
             stop_reason=None,
             stop_evidence=[],
             guard=new_guard(page),
@@ -123,6 +124,8 @@ class Agent:
             for a in state["page"]["actions"]:
                 if self.forbidden(a):
                     guard["excluded"][action_key(a)] = "forbidden by the scenario"
+                elif self.out_of_scope(a):
+                    guard["excluded"][action_key(a)] = "outside the scenario's scope"
             state["decision"] = choose(state["page"], state["goal"], state["history"],
                                        excluded=guard["excluded"])
             state["decisions"].append(
@@ -154,7 +157,7 @@ class Agent:
                 state["status"] = "blocked"
                 raise ValueError(f"Stopped at the {MAX_STEPS}-action demo budget")
             guard = state.setdefault("guard", new_guard(page))
-            if self.forbidden(action):  # Defense in depth: never execute, whatever was chosen.
+            if self.forbidden(action) or self.out_of_scope(action):  # Defense in depth: never execute.
                 evidence = [{"action": action["label"], "region": action.get("region")}]
                 return self.stop("forbidden_action_chosen", evidence)
             mutating = is_mutating(action)
@@ -256,6 +259,12 @@ class Agent:
         pattern = self.state.get("forbid")
         return bool(pattern) and action["kind"] in {"click", "select"} and \
             re.search(pattern, action.get("label", ""), re.IGNORECASE) is not None
+
+    def out_of_scope(self, action):
+        """A scenario may confine targets to regions (e.g. 'form'), so a header search is never mistaken for it."""
+        pattern = self.state.get("scope")
+        return bool(pattern) and action["kind"] in {"click", "fill", "select"} and \
+            re.search(pattern, action.get("region", ""), re.IGNORECASE) is None
 
     def track_progress(self, action, progress):
         """Stop loops by evidence: same target without progress, then any further failed attempt."""

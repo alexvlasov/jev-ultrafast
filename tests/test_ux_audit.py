@@ -150,3 +150,12 @@ def test_required_file_upload_is_an_agent_limit():
     result = {"status": "blocked", "stop_reason": None, "file_upload_pending": True,
               "verification": ux_audit.evaluate_expectations({"text_contains": ["Revisión"]}, facts(), facts())}
     assert ux_audit.classify(result)[:2] == ("blocked", "agent")
+
+
+def test_schema_1_results_still_summarize():
+    old = {"site": "https://example.com", "started": "then", "elapsed_s": 1.0, "pages": {},
+           "scenarios": [{"name": "s", "goal": "g", "status": "done", "verified": True, "elapsed_ms": 1000,
+                          "steps": [{"step": 0}], "console": [{"kind": "exception", "message": "boom"}],
+                          "signals": {"actions": 0, "ambiguous_decisions": 0, "repeated_actions": []}}]}
+    text = ux_audit.summarize(old)
+    assert "Schema 1" in text and "1× [exception] boom" in text
